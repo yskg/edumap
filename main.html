@@ -1,0 +1,290 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=9" />
+    <title>数字化教育地图在线服务平台</title>
+    <!-- <link rel="stylesheet" href="http://localhost/arcgis_js_api/library/3.13/3.13/dijit/themes/claro/claro.css" />-->
+ 
+    <link href="img/css/map.css" rel="stylesheet" type="text/css" />
+    <link href="jquery/css/jquery.dataTables.css" rel="stylesheet" />
+    <script type="text/javascript">
+        var dojoConfig = {
+            parseOnLoad: true,//用下面 parser.parse();
+            paths: {
+                extras: location.pathname.replace(/\/[^/]+$/, "") + "/extras"
+            }
+        };
+    </script>
+    <script src="js/jsapi_vsdoc12_v38.js" type="text/javascript"></script>
+    <script src="jquery/js/jquery.js" type="text/javascript"></script>
+    <script type="text/javascript" src="jquery/js/jquery.dataTables.js"></script>
+    <script type="text/javascript" src="echarts-2.2.3/build/source/echarts-all.js"></script>
+    <script type="text/javascript" src="js/addbar.js"></script>
+    <script type="text/javascript">
+        var map, navigation_tool, home_button;
+        var college_name = "";//表格当前选中行的第一个数据
+        require([
+          "dojo/dom",
+         "dojo/parser",
+         "dojo/ready",
+         "esri/map",
+         "esri/geometry/Extent",
+         "esri/InfoTemplate",
+         "esri/config",
+         "esri/dijit/InfoWindow",
+         "esri/dijit/Measurement",
+         "esri/tasks/GeometryService",
+         "esri/layers/ArcGISTiledMapServiceLayer",
+         "esri/layers/ArcGISDynamicMapServiceLayer",
+         "esri/toolbars/navigation",
+          "esri/dijit/OverviewMap",
+          "esri/dijit/Scalebar",
+          "esri/SnappingManager",
+          "esri/sniff",
+          "dojo/keys",
+           "extras/TDTLayer",
+           "extras/TDTAnnoLayer",
+         "dijit/TitlePane",
+         "dijit/layout/TabContainer",
+         "dijit/layout/ContentPane",
+         "dojox/layout/FloatingPane",
+         "dojo/domReady!"
+        ], function (dom, parser, ready, Map, Extent, InfoTemplate, esriConfig, InfoWindow, Measurement, GeometryService,
+            ArcGISTiledMapServiceLayer, ArcGISDynamicMapServiceLayer, Navigation, OverviewMap, Scalebar, SnappingManager, has, keys,
+            TDTLayer, TDTAnnoLayer
+       ) {
+            ready(function () {
+                esriConfig.defaults.io.proxyUrl = "/proxy/";
+                esriConfig.defaults.io.alwaysUseProxy = false;//测量工具必须加入几何服务
+                esriConfig.defaults.geometryService = new GeometryService("http://tasks.arcgisonline.com/ArcGIS/rest/services/Geometry/GeometryServer");
+                //esriConfig.defaults.map.zoomRate = 5000;
+                //parser.parse();
+                var lods = [{
+                        "level": 3,
+                        "resolution": 19567.8792409999,
+                        "scale": 73957190.948944
+                    }, {
+                        "level": 4,
+                        "resolution": 9783.93962049996,
+                        "scale": 36978595.474472
+                    }, {
+                        "level": 5,
+                        "resolution": 4891.96981024998,
+                        "scale": 18489297.737236
+                    }, {
+                        "level": 6,
+                        "resolution": 2445.98490512499,
+                        "scale": 9244648.868618
+                    }, {
+                        "level": 7,
+                        "resolution": 1222.99245256249,
+                        "scale": 4622324.434309
+                    }, {
+                        "level": 8,
+                        "resolution": 611.49622628138,
+                        "scale": 2311162.217155
+                    }, {
+                        "level": 9,
+                        "resolution": 305.748113140558,
+                        "scale": 1155581.108577
+                    }, {
+                        "level": 10,
+                        "resolution": 152.874056570411,
+                        "scale": 577790.554289
+                    },
+                    {
+                        "level": 11,
+                        "resolution": 76.4370282850732,
+                        "scale": 288895.277144
+                    }, {
+                        "level": 12,
+                        "resolution": 38.2185141425366,
+                        "scale": 144447.638572
+                    }, {
+                        "level": 13,
+                        "resolution": 19.1092570712683,
+                        "scale": 72223.819286
+                    }, {
+                        "level": 14,
+                        "resolution": 9.55462853563415,
+                        "scale": 36111.909643
+                    }, {
+                        "level": 15,
+                        "resolution": 4.77731426794937,
+                        "scale": 18055.954822
+                    }, {
+                        "level": 16,
+                        "resolution": 2.38865713397468,
+                        "scale": 9027.977411
+                    }, {
+                        "level": 17,
+                        "resolution": 1.19432856685505,
+                        "scale": 4513.988705
+                    }];
+                map = new Map("mapdiv", { extent: new Extent(80, 5, 130, 60), logo: false, lods: lods, slider: false});
+                map.setMapCursor("pointer");//设置指针类型crosshair:十字形，text：输入文本型pointer:手型
+                tiledMapServiceLayer = new ArcGISTiledMapServiceLayer("http://cache1.arcgisonline.cn/arcgis/rest/services/ChinaOnlineCommunity/MapServer");//, { displayLevels: [7,8,9,10,11,12,13] }显示切片级别
+                map.addLayer(tiledMapServiceLayer);//全球，投影坐标系统WGS_1984_Web_Mercator_Auxiliary_Sphere WKID: 3857/102100 Authority: EPSG
+                //比例尺
+                var scalebar = new Scalebar({
+                    map: map,
+                    attachTo: "bottom-left",
+                    scalebarUnit: "dual"
+                });
+                //放大、缩小
+                var navigation = new Navigation(map);
+                navigation_tool = function (para) {
+                    switch (para) {
+                        case "zoom_in":
+                            navigation.activate(Navigation.ZOOM_IN);
+                            break;
+                        case "zoom_out":
+                            navigation.activate(Navigation.ZOOM_OUT);
+                            break;
+                        case "pan":
+                            navigation.activate(Navigation.PAN);
+                            break;
+                    }
+                };
+                //默认范围
+                home_button = function () {
+                    map.setExtent(new Extent(80, 5, 130, 60));
+                }
+                map.on("load", add_layer);
+                //  mapExtentChange = map.on("extent-change", ceshi);mapExtentChange.remove();
+                //map.layerIds 切片和动态图层id
+                // map.graphicsLayerIds featurelayer要素图层id和添加的clusterid
+
+                //图层面板切换事件
+                //  dojo.connect(dijit.byId("tabs"), "selectChild", layer_change);
+                upload_table();//初始化表格
+                drag_tongji();//拖动统计表
+                time_info();
+            })
+        });
+
+        function ceshi() {
+            map.infoWindow.hide();
+        }
+
+    </script>
+</head>
+
+<body class="tundra">
+    <div class="maparea">
+        <div class="header">
+            <div class="logo"></div>
+            <div class="searchArea">
+                <input id="search_text" type="text" class="searchformstyle" onkeydown="if (event.keyCode == 13) { search_execute(this.value);}" /><img src="img/search_btn.gif" class="searchbtn" alt="加载..." title="搜索" onclick="search_execute( dojo.byId('search_text').value)" />
+            </div>
+            <div class="rightImg"></div>
+        </div>
+        <!--地图控制-->
+        <div class="maptoolsarea">
+            <div class="btn_suoxiao" onclick="navigation_tool('zoom_out')" title="缩小"></div>
+            <div class="btn_fangda" onclick="navigation_tool('zoom_in')" title="放大"></div>
+            <div class="btn_yidong" onclick="navigation_tool('pan')" title="漫游"></div>
+            <div class="btn_view" onclick="home_button()" title="默认范围"></div>
+            <div class="btn_clear" onclick="clear_all() " title="清除"></div>
+
+        </div>
+        <!--三个导航button-->
+        <div class="naviBtnArea">
+            <div class="btn_tuceng" onclick="turn_layercontrol()"></div>
+            <div class="btn_timeline" onclick="turn_timecontrol()"></div>
+            <div class="btn_tongji" onclick="turn_tongji()"></div>
+        </div>
+        <!--搜索结果区域-->
+        <div id="search_results" class="searcharea">
+            <div class="searchtitle">
+                <h6>查询结果</h6>
+                <img src="img/close_btn.png" class="closebtn" alt="加载..." onclick="clear_search()" />
+            </div>
+            <div id="search_items" class="itemgroup">
+            </div>
+        </div>
+        <!--图层控制-->
+        <div id="layer_control" class="tucengarea">
+            <div class="searchtitle">
+                <h6>图层控制</h6>
+                <img src="img/close_btn.png" class="closebtn" alt="加载..." onclick="close_layer()" />
+            </div>
+            <div>
+                <div id="tabs" data-dojo-type="dijit.layout.TabContainer" style="width: 200px; height: 220px;">
+                    <div id="tabs0" data-dojo-type="dijit.layout.ContentPane" title="大学">
+                        <input id="college_985" type="checkbox" checked="checked" onclick="college_control(this.id)" /><img src="school_image/pin1.png" class="imgcss" /><label>985高校</label><br />
+                        <input id="college_211" type="checkbox" checked="checked" onclick="college_control(this.id)" /><img src="school_image/pin2.png" class="imgcss" /><label>211高校</label><br />
+                        <input id="college_bk" type="checkbox" checked="checked" onclick="college_control(this.id)" /><img src="school_image/pin3.png" class="imgcss" /><label>本科院校</label><br />
+                        <input id="college_zk" type="checkbox" checked="checked" onclick="college_control(this.id)" /><img src="school_image/pin4.png" class="imgcss" /><label>专科院校</label><br />
+                        <input id="college_density" type="checkbox" onclick="college_control(this.id)" /><label>&nbsp;&nbsp;全国高校分布密度图</label><br />
+                    </div>
+                    <div id="tabs1" data-dojo-type="dijit.layout.ContentPane" title="中小学">
+                        <input id="school_ye" type="checkbox" onclick="school_control(this.id)" /><img src="school_image/pin9.png" class="imgcss" /><label>幼儿园</label><br />
+                        <input id="school_xx" type="checkbox" onclick="school_control(this.id)" /><img src="school_image/pin8.png" class="imgcss" /><label>小学</label><br />
+                        <input id="school_cz" type="checkbox" onclick="school_control(this.id)" /><img src="school_image/pin11.png" class="imgcss" /><label>初中</label><br />
+                        <input id="school_gz" type="checkbox" onclick="school_control(this.id)" /><img src="school_image/pin6.png" class="imgcss" /><label>高中</label><br />
+                        <input id="school_gx" type="checkbox" onclick="school_control(this.id)" /><img src="school_image/pin5.png" class="imgcss" /><label>高校</label><br />
+                        <input id="school_zz" type="checkbox" onclick="school_control(this.id)" /><img src="school_image/pin10.png" class="imgcss" /><label>中职</label><br />
+                        <input id="school_tj" type="checkbox" onclick="school_control(this.id)" /><img src="school_image/pin7.png" class="imgcss" /><label>特教学校</label><br />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!--时间轴-->
+        <div id="time_control" class="timearea">
+            <div class="searchtitle">
+                <h6>时间地图</h6>
+                <img src="img/close_btn.png" class="closebtn" alt="加载..." onclick="close_timecontrol()" />
+            </div>
+            <input id="time_985" type="checkbox" onclick="timeline_control(this.id)" /><img src="time_image/clg985.png" class="imgcss" />
+            985高校<br />
+            <input id="time_211" type="checkbox" onclick="timeline_control(this.id)" /><img src="time_image/clg211.png" class="imgcss" />211高校<br />
+            <input id="time_bk" type="checkbox" onclick="timeline_control(this.id)" /><img src="time_image/clgbk.png" class="imgcss" />本科院校<br />
+            <input id="time_zk" type="checkbox" onclick="timeline_control(this.id)" /><img src="time_image/clgzk.png" class="imgcss" />专科院校
+        </div>
+        <div id="time_info" class="timeline">
+            <div class="searchtitle">
+                <h6>时间轴</h6>
+                <img src="img/close_btn.png" class="closebtn" alt="加载..." onclick="close_timeline()" />
+            </div>
+            <div style="text-align: center;">当前时间<span id="date_range">1865年</span></div>
+            <div id="time_slider" class="timelinearea">
+            </div>
+        </div>
+        <!-- 统计分析-->
+        <div id="tongji_div" class="tongjiarea">
+            <div id="title" class="searchtitle" style="cursor: move;">
+                <h6>统计分析</h6>
+                <img src="img/close_btn.png" class="closebtn" alt="加载..." onclick="close_tongji()" style="cursor: pointer;" />
+            </div>
+            <div id="tongji_tab" data-dojo-type="dijit.layout.TabContainer" style="width: 1050px; height: 490px;">
+                <div id="datatable" data-dojo-type="dijit.layout.ContentPane" title="数据视图" style="width: 1000px; height: 490px;">
+                    <table id="example" class="display hover cell-border" style="font-size: small">
+                        <thead>
+                            <tr>
+                                <th>学校名称</th>
+                                <th>校区</th>
+                                <th>地理位置</th>
+                                <th>985院校</th>
+                                <th>211院校</th>
+                                <th>其他</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+                <div id="clg_bar" data-dojo-type="dijit.layout.ContentPane" title="可视化柱状图" style="width: 1000px; height: 460px;">
+                </div>
+                <div id="clg_map" data-dojo-type="dijit.layout.ContentPane" title="可视化地图" style="width: 1000px; height: 460px;">
+                </div>
+                <div id="clg_time" data-dojo-type="dijit.layout.ContentPane" title="时间地图" style="width: 1000px; height: 460px;">
+                </div>
+                <div id="clg_gdp" data-dojo-type="dijit.layout.ContentPane" title="散点图" style="width: 1000px; height: 460px;">
+                </div>
+            </div>
+        </div>
+        <div id="mapdiv" style="width: 100%; height: 82%;"></div>
+    </div>
+</body>
+</html>
